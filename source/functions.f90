@@ -12,13 +12,23 @@ real function gaussianflux(a,c)
 
 end function gaussianflux
 
-character (len=10) function gettime()
-! write out the time that the function was called
-  implicit none
-  character (len=10) :: time
+character(len=11) function gettime()
+implicit none
+character(len=10) :: time
+character(len=11), save :: oldtime
 
-  call DATE_AND_TIME(TIME=time)
-  gettime = time(1:2)//":"//time(3:4)//":"//time(5:6)
+!debugging
+#ifdef CO
+        !print *,"function: gettime"
+#endif
+
+  call date_and_time(TIME=time)
+  gettime = time(1:2)//":"//time(3:4)//":"//time(5:6)//" : "
+  if (gettime .eq. oldtime) then
+    gettime = "          "
+  else
+    oldtime = gettime
+  endif
   return
 
 end function gettime
@@ -68,6 +78,7 @@ subroutine makespectrum(lines,spec)
   integer :: i
   type(spectrum), dimension(:) :: spec
   type(linelist), dimension(:), intent(in) :: lines
+  real :: sigma
 
 #ifdef CO
 !not so useful, gets called hundreds of times
@@ -75,9 +86,10 @@ subroutine makespectrum(lines,spec)
 #endif
 
   do i=1,size(lines)
-    where (abs(lines(i)%redshift*lines(i)%wavelength - spec%wavelength) .lt. (5*lines(i)%wavelength/lines(i)%resolution))
+    sigma=lines(i)%wavelength/lines(i)%resolution
+    where (abs(lines(i)%redshift*lines(i)%wavelength - spec%wavelength) .lt. 5.*sigma)
       spec%flux = spec%flux + &
-      &lines(i)%peak*exp((-(spec%wavelength-lines(i)%redshift*lines(i)%wavelength)**2)/(2*(lines(i)%wavelength/lines(i)%resolution)**2))
+      &lines(i)%peak*exp((-(spec%wavelength-lines(i)%redshift*lines(i)%wavelength)**2)/(2*sigma**2))
     end where
   enddo
 
