@@ -1,4 +1,4 @@
-alfa (1.00-1) unstable; urgency=low
+alfa (1.0-1) unstable; urgency=low
 
   * more robust FITS handling, support for logarithmically sampled spectra
   * fixed libcfitsio depency (Closes: #841658)
