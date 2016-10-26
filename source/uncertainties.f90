@@ -1,3 +1,6 @@
+!Copyright (C) 2013- Roger Wesson
+!Free under the terms of the GNU General Public License v3
+
 module mod_uncertainties
 use mod_types
 use mod_quicksort
@@ -38,7 +41,7 @@ subroutine get_uncertainties(fittedspectrum, realspec, fittedlines)
   realspec(1:10)%uncertainty=realspec(11)%uncertainty
   realspec(size(realspec%uncertainty)-10:size(realspec%uncertainty))%uncertainty=realspec(size(realspec%uncertainty)-11)%uncertainty
 
-! determine uncertainty for each line from ratio of peak flux to rms at wavelength of line
+! determine uncertainty for each line from ratio of peak flux to rms at wavelength of line, using relation from Lenz & Ayres, 1992, PASP, 104, 1104
 
   wavelengthsampling=realspec(2)%wavelength - realspec(1)%wavelength
 

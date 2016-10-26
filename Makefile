@@ -71,7 +71,7 @@ alfa: source/types.o source/functions.o source/commandline.o source/readfiles.o 
 	$(LD) $(LDFLAGS) $(FFLAGS) -o $@ $^ ${CFITSIOFLAGS}
 
 clean:
-	rm -f alfa source/*.o source/*.mod
+	rm -f alfa source/*.o source/*.mod man/alfa.html
 
 install:
 	test -e ${DESTDIR}${PREFIX}/share/alfa || mkdir -p ${DESTDIR}${PREFIX}/share/alfa
@@ -80,7 +80,8 @@ install:
 	install -m 644 linelists/* ${DESTDIR}${PREFIX}/share/alfa
 	install alfa ${DESTDIR}${PREFIX}/bin
 	install -m 644 man/alfa.1 ${MANDIR}
-	-test -e ${DESTDIR}${PREFIX}/share/bash-completion/completions && install -m 644 source/bashcompletion ${DESTDIR}${PREFIX}/share/bash-completion/completions/alfa
+	test -e ${DESTDIR}${PREFIX}/share/bash-completion/completions || mkdir -p ${DESTDIR}${PREFIX}/share/bash-completion/completions
+	install -m 644 source/bashcompletion ${DESTDIR}${PREFIX}/share/bash-completion/completions/alfa
 	gzip -f ${MANDIR}/alfa.1
 
 uninstall:
@@ -88,3 +89,6 @@ uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/alfa
 	rm -f ${DESTDIR}${PREFIX}/share/bash-completion/completions/alfa
 	rm -f ${MANDIR}/alfa.1.gz
+
+htmlmanual:
+	groff -m mandoc -Thtml man/alfa.1 > man/alfa.html
