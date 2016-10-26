@@ -1,53 +1,79 @@
-.\" Manpage for neat.
-.TH alfa 1 "22 Apr 2016" "1.0" "alfa man page"
+.\" Manpage for alfa.
+.TH alfa 1 "26 Aug 2016" "1.0" "alfa man page"
 .SH NAME
-alfa \- automated line fitting algorithm
+\fBalfa\fR \- automated line fitting algorithm
 .SH SYNOPSIS
-alfa [\fIOPTION\fR] [\fIVALUE\fR]... [\fIFILE\fR]
+\fBalfa\fR [\fIOPTION\fR] [\fIVALUE\fR]... [\fIFILE\fR]
 .SH DESCRIPTION
-\fBalfa\fR rapidly fits deep emission line spectra, using a genetic algorithm to optimise fitting parameters.  It has a number of configurable parameters, and while the default values should work well in many situations, a good fit to your observed spectrum may require some adjustments.
+\fBalfa\fR rapidly fits emission line spectra, using a genetic algorithm to optimise fitting parameters.  It is intended to be entirely automated, but while the default values should work well in many situations, a good fit to your observed spectrum may require some adjustments to the input parameters.  It is optimised for optical spectra, but can be applied to any wavelength range if a suitable line catalogue is provided.
 .PP
 \fBalfa\fR reads one dimensional spectra in either plain text or FITS format.  Plain text input should consist of two columns, giving wavelength and flux.  It can also read data cubes and row-stacked spectra in FITS format.  Results are written out in plain text, to files containing the fit (total fit, continuum-subtracted original, continuum, sky lines and residuals), and the line flux measurements.
 .SH OPTIONS
+
 .TP
-.B \-n, \-\-normalise [VALUE]
-normalise to Hb=100 assuming that F(Hb)=\fIVALUE\fR.  If \fIVALUE\fR is zero, no normalisation is applied.  If this option is not specified, fluxes are normalised using the measured value of Hb if it is detected, and not normalised otherwise.
+.B \-b, \-\-bad-data [REAL]
+If all values in a spectrum are below the value specified, \fBalfa\fR will not fit it.  Most useful for avoiding wasting time on low signal regions of data cubes.
+
 .TP
-.B \-vg, \-\-velocity\-guess [VALUE]
-initial guess for the velocity of the object [km/s]. Default: 0.
-.TP
-.B \-rg, \-\-resolution\-guess [VALUE]
-initial guess for the resolution [lambda/delta lambda]. Default: estimated using the sampling of the input spectrum, assuming that it is Nyquist sampled.
-.TP
-.B \-vtol1, \-\-velocity\-tolerance\-1 [VALUE]
-variation allowed in velocity in first pass of the fitting. Default: 900km/s
-.TP
-.B \-vtol2, \-\-velocity\-tolerance\-2 [VALUE]
-variation allowed in velocity in second pass of the fitting. Default: 60km/s
-.TP
-.B \-rtol1, \-\-resolution\-tolerance\-1 [VALUE]
-variation allowed in resolution in first pass. Default: equal to 0.9 x resolution guess
-.TP
-.B \-rtol2, \-\-resolution\-tolerance\-2 [VALUE]
-variation allowed in resolution in second pass. Default: 500.
-.TP
-.B \-ss, \-\-subtract\-sky
-fit and subtract night sky emission lines before fitting nebular emission lines
-.TP
-.B \-o, \-\-output\-dir [DIRECTORY]
-the directory in which to put the output files. Default: current working directory
-.TP
-.B \-skycat, \-strongcat, \-deepcat [FILENAME]
-the files containing the line catalogues to be used for the removal of sky lines, the estimation of velocity and resolution, and the full line fitting.  The default catalogues are stored in /usr/share/alfa
+.B \-\-citation
+Prints out the bibliographic details of the paper to cite if you use \fBalfa\fR in your research.
+
 .TP
 .B \-g, \-\-generations [INTEGER]
-the number of generations used in the genetic algorithm. Default: 500
+The number of generations used in the genetic algorithm. Default: 500
+
 .TP
-.B \-ps, \-\-populationsize [INTEGER]
-The size of the population used in the genetic algorithm. Default: 30
+.B \-n, \-\-normalise [VALUE]
+Normalise to Hb=100 assuming that F(Hb)=\fIVALUE\fR.  If \fIVALUE\fR is zero, no normalisation is applied.  If this option is not specified, fluxes are normalised using the measured value of Hb if it is detected, and not normalised otherwise.
+
+.TP
+.B \-o, \-\-output\-dir [DIRECTORY]
+The directory in which to put the output files. Default: current working directory.
+
 .TP
 .B \-pr, \-\-pressure [REAL]
 The fraction of the population retained from each generation. The product of the pressure and the population size should be an integer.  Default: 0.3
+
+.TP
+.B \-ps, \-\-populationsize [INTEGER]
+The size of the population used in the genetic algorithm. Default: 30
+
+.TP
+.B \-rg, \-\-resolution\-guess [VALUE]
+Initial guess for the resolution [lambda/delta lambda]. Default: estimated using the sampling of the input spectrum, assuming that it is Nyquist sampled.
+
+.TP
+.B \-rtol1, \-\-resolution\-tolerance\-1 [VALUE]
+Variation allowed in resolution in first pass. Default: equal to 0.9 x resolution guess.
+
+.TP
+.B \-rtol2, \-\-resolution\-tolerance\-2 [VALUE]
+Variation allowed in resolution in second pass. Default: 500.
+
+.TP
+.B \-skycat, \-strongcat, \-deepcat [FILENAME]
+The files containing the line catalogues to be used for the removal of sky lines, the estimation of velocity and resolution, and the full line fitting.  The default catalogues are stored in /usr/share/alfa .  If you wish to create your own catalogue, the required format is that each line should be 85 characters wide, with a wavelength in the first column, and the rest of the characters are not used by the code but are transferred to the output files.  They can thus be used, as in the supplied catalogues, for line transition data.
+
+.TP
+.B \-ss, \-\-subtract\-sky
+Fit and subtract night sky emission lines before fitting nebular emission lines.
+
+.TP
+.B \-ul, \-\-upper-limits
+Write out upper limits for all lines searched for and not detected.
+
+.TP
+.B \-vg, \-\-velocity\-guess [VALUE]
+Initial guess for the velocity of the object [km/s]. Default: 0.
+
+.TP
+.B \-vtol1, \-\-velocity\-tolerance\-1 [VALUE]
+Variation allowed in velocity in first pass of the fitting. Default: 900km/s
+
+.TP
+.B \-vtol2, \-\-velocity\-tolerance\-2 [VALUE]
+Variation allowed in velocity in second pass of the fitting. Default: 60km/s
+
 .SH SEE ALSO
 neat
 .SH BUGS

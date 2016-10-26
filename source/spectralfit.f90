@@ -1,3 +1,6 @@
+!Copyright (C) 2013- Roger Wesson
+!Free under the terms of the GNU General Public License v3
+
 ! this is the general fitting routine, which first subtracts a continuum, then fits sky lines if requested, then fits the emission lines
 ! it is called from within parallelised wrappers for 2D and 3D data, and simply called for 1D data.
 
@@ -94,7 +97,7 @@ else
 
   call fit(stronglines, redshiftguess, resolutionguess, fittedlines, vtol1, rtol1, generations, popsize, pressure)
 
-  if (messages) print *,gettime(),"estimated redshift and resolution: ",c*(fittedlines(1)%redshift-1),fittedlines(1)%resolution
+  if (messages) print *,gettime(),"estimated velocity and resolution: ",c*(fittedlines(1)%redshift-1),fittedlines(1)%resolution
   redshiftguess_overall = fittedlines(1)%redshift ! when fitting chunks, use this redshift to get lines in the right range from the catalogue. if velocity from each chunk is used, then there's a chance that a line could be missed or double counted due to variations in the calculated velocity between chunks.
   redshiftguess=fittedlines(1)%redshift
   resolutionguess=fittedlines(1)%resolution
@@ -217,7 +220,7 @@ open(100+tid,file=trim(outputdirectory)//trim(outputbasename)//"_fit")
 
 write (100+tid,*) """wavelength""  ""input spectrum ""  ""fitted spectrum""  ""cont-subbed orig"" ""continuum""  ""sky lines""  ""residuals"""
 do i=1,spectrumlength
-  write(100+tid,"(F8.2, 6(ES12.3))") fittedspectrum(i)%wavelength,realspec(i)%flux + continuum(i)%flux, fittedspectrum(i)%flux + continuum(i)%flux + skyspectrum(i)%flux, realspec(i)%flux, continuum(i)%flux, skyspectrum(i)%flux, realspec(i)%flux - fittedspectrum(i)%flux
+  write(100+tid,"(F8.2, 7(ES12.3))") fittedspectrum(i)%wavelength,realspec(i)%flux + continuum(i)%flux, fittedspectrum(i)%flux + continuum(i)%flux + skyspectrum(i)%flux, realspec(i)%flux, continuum(i)%flux, skyspectrum(i)%flux, realspec(i)%flux - fittedspectrum(i)%flux, realspec(i)%uncertainty
 enddo
 
 close(100+tid)
@@ -284,6 +287,10 @@ do i=1,totallines
       if (messages) write (100+tid,"(F8.2,' & ',F8.2,' &            * &            *',A85)") fittedlines(i)%wavelength*fittedlines(i)%redshift,fittedlines(i)%wavelength,fittedlines(i)%linedata
       write (200+tid,"(F8.2,F8.2,'           *           *')") fittedlines(i)%wavelength*fittedlines(i)%redshift,fittedlines(i)%wavelength
     endif
+! write out 3 sigma upper limit for non-detections if upperlimits flag is set
+  elseif (fittedlines(i)%uncertainty .le. 3.0 .and. upperlimits .eqv. .true.) then
+    if (messages) write (100+tid,"(F8.2,' & ',F8.2,' & ',"//fluxformat//",' & upper limit ',A85)") fittedlines(i)%wavelength*fittedlines(i)%redshift,fittedlines(i)%wavelength, 3.*gaussianflux(fittedlines(i)%peak,(fittedlines(i)%wavelength/fittedlines(i)%resolution))/fittedlines(i)%uncertainty, fittedlines(i)%linedata
+    write (200+tid,"(2(F8.2),"//fluxformat//",' upper limit')") fittedlines(i)%wavelength*fittedlines(i)%redshift, fittedlines(i)%wavelength, 3.*gaussianflux(fittedlines(i)%peak,(fittedlines(i)%wavelength/fittedlines(i)%resolution))/fittedlines(i)%uncertainty
   endif
 enddo
 

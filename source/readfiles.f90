@@ -1,10 +1,13 @@
+!Copyright (C) 2013- Roger Wesson
+!Free under the terms of the GNU General Public License v3
+
 module mod_readfiles
 use mod_types
 use mod_routines
 
 contains
 
-subroutine getfiletype(spectrumfile, filetype, dimensions, axes, wavelength, dispersion, referencepixel)
+subroutine getfiletype(spectrumfile, filetype, dimensions, axes, wavelength, dispersion, referencepixel, loglambda)
 !this subroutine determines what type of file the input file is
 !input is the file name
 !output is the file type, indicated by:
@@ -16,19 +19,21 @@ subroutine getfiletype(spectrumfile, filetype, dimensions, axes, wavelength, dis
 
   implicit none
   character (len=*) :: spectrumfile
-  integer :: filetype, dimensions, referencepixel
+  integer :: filetype, dimensions
   integer, dimension(:), allocatable :: axes
+  logical :: loglambda
 
   !cfitsio variables
 
   integer :: status,unit,readwrite,blocksize,hdutype
-  real :: wavelength, dispersion
+  real :: wavelength, dispersion, referencepixel
+  character(len=80) :: ctype
 
 #ifdef CO
   print *,"subroutine: getfiletype"
 #endif
 
-  referencepixel=1
+  referencepixel=1.0
 
   !check if it's a fits file
 
@@ -51,10 +56,10 @@ subroutine getfiletype(spectrumfile, filetype, dimensions, axes, wavelength, dis
     enddo
     if (dimensions .eq. 0) then ! still no axes found
       print *,gettime(),"error : no axes found in ",trim(spectrumfile)
-      stop
+      call exit(1)
     elseif (dimensions .gt. 3) then ! can't imagine what a 4D fits file would actually be, but alfa definitely can't handle it
       print *,gettime(),"error : more than 3 axes found in ",trim(spectrumfile)
-      stop
+      call exit(1)
     endif
 
     ! now get the dimensions of the axis
@@ -63,25 +68,79 @@ subroutine getfiletype(spectrumfile, filetype, dimensions, axes, wavelength, dis
     call ftgisz(unit,dimensions,axes,status)
     filetype=dimensions
 
-    ! get wavelength and dispersion
-    ! todo: make this more robust
+    ! get wavelength, dispersion and reference pixel
+
+    status=0
 
     if (dimensions .lt. 3) then
+
       call ftgkye(unit,"CRVAL1",wavelength,"",status)
-      call ftgkyj(unit,"CRPIX1",referencepixel,"",status)
+      if (status .ne. 0) then
+        print *,gettime(),"error: couldn't find wavelength value at reference pixel CRVAL1."
+        call exit(1)
+      endif
+
+      call ftgkye(unit,"CRPIX1",referencepixel,"",status)
+      if (status .ne. 0) then
+        print *,gettime(),"warning: couldn't find reference pixel CRPIX1. Setting to 1.0"
+        referencepixel=1.0
+        status=0
+      endif
+
       call ftgkye(unit,"CDELT1",dispersion,"",status)
       if (status.ne.0) then
         status=0
         call ftgkye(unit,"CD1_1",dispersion,"",status)
+          if (status .ne. 0) then
+            print *,gettime(),"error: couldn't find wavelength dispersion CDELT1 or CD1_1."
+            call exit(1)
+          endif
       endif
+
+      ! check if the wavelength axis is log-sampled
+print *,"fuuuu"
+      call ftgkey(unit,"CTYPE1",ctype,"",status)
+print *,"shite"
+      if (index(ctype,"-LOG").gt.0) then
+        loglambda = .true.
+      else
+        loglambda = .false.
+      endif
+print *,"ffff"
     else
+
       call ftgkye(unit,"CRVAL3",wavelength,"",status)
-      call ftgkyj(unit,"CRPIX3",referencepixel,"",status)
+      if (status .ne. 0) then
+        print *,gettime(),"error: couldn't find wavelength value at referencepixel CRVAL1."
+        call exit(1)
+      endif
+
+      call ftgkye(unit,"CRPIX3",referencepixel,"",status)
+      if (status .ne. 0) then
+        print *,gettime(),"warning: couldn't find reference pixel CRPIX1. Setting to 1.0"
+        referencepixel=1.0
+        status=0
+      endif
+
       call ftgkye(unit,"CDELT3",dispersion,"",status)
       if (status.ne.0) then
         status=0
         call ftgkye(unit,"CD3_3",dispersion,"",status)
+        if (status .ne. 0) then
+          print *,gettime(),"error: couldn't find wavelength dispersion CDELT1 or CD1_1."
+          call exit(1)
+        endif
       endif
+
+      ! check if the wavelength axis is log-sampled
+
+      call ftgkey(unit,"CTYPE3",ctype,"",status)
+      if (index(ctype,"-LOG").gt.0) then
+        loglambda = .true.
+      else
+        loglambda = .false.
+      endif
+
     endif
 
     ! close file
@@ -140,13 +199,13 @@ subroutine readascii(spectrumfile, realspec, spectrumlength, fittedspectrum)
 
 end subroutine readascii
 
-subroutine read1dfits(spectrumfile, realspec, spectrumlength, fittedspectrum, wavelength, dispersion, referencepixel)
+subroutine read1dfits(spectrumfile, realspec, spectrumlength, fittedspectrum, wavelength, dispersion, referencepixel, loglambda)
 ! read in a 1D fits file
 
   implicit none
   character (len=512) :: spectrumfile
   integer :: i
-  integer :: spectrumlength, referencepixel
+  integer :: spectrumlength
 
   type(spectrum), dimension(:), allocatable :: realspec, fittedspectrum
 
@@ -156,7 +215,8 @@ subroutine read1dfits(spectrumfile, realspec, spectrumlength, fittedspectrum, wa
   integer :: group
   real :: nullval
   logical :: anynull
-  real :: wavelength, dispersion
+  real :: wavelength, dispersion, referencepixel
+  logical :: loglambda
 
 #ifdef CO
   print *,"subroutine: read1dfits"
@@ -178,9 +238,15 @@ subroutine read1dfits(spectrumfile, realspec, spectrumlength, fittedspectrum, wa
 
   ! calculate wavelength values
 
-  do i=1,spectrumlength
-    realspec(i)%wavelength = wavelength+(i-referencepixel)*dispersion
-  enddo
+  if (loglambda) then
+    do i=1,spectrumlength ! log-sampled case
+      realspec(i)%wavelength = wavelength*exp((i-referencepixel)*dispersion/wavelength)
+    enddo
+  else
+    do i=1,spectrumlength ! linear case
+      realspec(i)%wavelength = wavelength+(i-referencepixel)*dispersion
+    enddo
+  endif
 
   ! read spectrum into memory
 
@@ -190,7 +256,7 @@ subroutine read1dfits(spectrumfile, realspec, spectrumlength, fittedspectrum, wa
     print "(X,A,A,I7,A)",gettime(),"read 1D fits file with ",spectrumlength," data points into memory."
   else
     print *,gettime(),"couldn't read file into memory"
-    stop
+    call exit(1)
   endif
 
   ! close file
@@ -256,7 +322,7 @@ subroutine read2dfits(spectrumfile, rssdata, dimensions, axes)
   else
     print *,gettime(),"couldn't read RSS file into memory"
     print *,"error code ",status
-    stop
+    call exit(1)
   endif
 
 end subroutine read2dfits
@@ -312,7 +378,7 @@ subroutine read3dfits(spectrumfile, cubedata, dimensions, axes)
     print "(X,A,A,I7,A)",gettime(),"read ",axes(1)*axes(2)," pixels into memory."
   else
     print *,gettime(),"couldn't read cube into memory"
-    stop
+    call exit(1)
   endif
 
 end subroutine read3dfits
@@ -343,14 +409,14 @@ subroutine readlinelist(linelistfile,referencelinelist,nlines,wavelength1, wavel
 
   if (trim(linelistfile)=="") then
     print *,gettime(),"error: No line catalogue specified"
-    stop
+    call exit(1)
   endif
 
   inquire(file=linelistfile, exist=file_exists) ! see if the input file is present
 
   if (.not. file_exists) then
     print *,gettime(),"error: line catalogue ",trim(linelistfile)," does not exist"
-    stop
+    call exit(1)
   else
     I = 0
     OPEN(199, file=linelistfile, iostat=IO, status='old')
