@@ -1,3 +1,10 @@
+alfa (1.00-1) unstable; urgency=low
+
+  * more robust FITS handling, support for logarithmically sampled spectra
+  * fixed libcfitsio depency (Closes: #841658)
+
+ -- Roger Wesson <rw@nebulousresearch.org>  Tue, 25 Oct 2016 23:05:14 +0100
+
 alfa (0.98-1) unstable; urgency=low
 
   * Initial release (Closes: #809507)
