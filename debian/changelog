@@ -1,3 +1,9 @@
+alfa (1.0-2) unstable; urgency=low
+
+  * simplified build dependencies (Closes: #842197)
+
+ -- Roger Wesson <rw@nebulousresearch.org>  Mon, 31 Oct 2016 14:43:13 +0000
+
 alfa (1.0-1) unstable; urgency=low
 
   * more robust FITS handling, support for logarithmically sampled spectra
