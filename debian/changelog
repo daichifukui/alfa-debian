@@ -1,3 +1,9 @@
+alfa (1.0-3) unstable; urgency=low
+
+  * updated repository URLs
+
+ -- Roger Wesson <rw@nebulousresearch.org>  Sat, 25 Aug 2018 11:11:25 +0100
+
 alfa (1.0-2) unstable; urgency=low
 
   * simplified build dependencies (Closes: #842197)
