@@ -6,8 +6,8 @@
 
 ! subtract the continuum
 
-if (messages) print *,gettime(),"fitting continuum"
-call fit_continuum(realspec,spectrumlength, continuum)
+if (messages .and. subtractcontinuum) print *,gettime(),"fitting continuum"
+call fit_continuum(realspec,continuum)
 
 ! now do the fitting
 ! first get guesses for the redshift and resolution
@@ -42,33 +42,57 @@ if (subtractsky) then
   !if there are any sky lines to fit, then go though in chunks of 400 units
   if (nlines .gt. 0) then
     do i=1,spectrumlength,400
-      if (i+400 .gt. spectrumlength) then
-        endpos=spectrumlength
+
+! overlap=nint(2*vtol2/(1-realspec(i)%wavelength/realspec(i+1)%wavelength)) ! this needs fixing, i+1 can be out of bounds
+      overlap=20
+
+! avoid refitting final section. if spectrumlength%400<overlap, this would happen
+
+      if ((spectrumlength-i)<overlap) exit
+
+      if (i .eq. 1) then
+        startpos=1
+        startwlen=realspec(1)%wavelength
       else
-        endpos=i+400
+        startpos=i-overlap
+        startwlen=realspec(i)%wavelength
       endif
 
-      allocate(spectrumchunk(endpos-i+1))
-      spectrumchunk = realspec(i:endpos)
+      if (i+400+overlap-1 .gt. spectrumlength) then
+        endpos=spectrumlength
+        endwlen=realspec(spectrumlength)%wavelength
+      else
+        endpos=i+400+overlap-1
+        endwlen=realspec(i+400)%wavelength
+      endif
 
-      !read in sky lines in chunk
-      call selectlines(skylines_catalogue, realspec(i)%wavelength, realspec(endpos)%wavelength, skylines_section, nlines)
+      allocate(spectrumchunk(endpos-startpos+1))
+      spectrumchunk = realspec(startpos:endpos)
+
+      call selectlines(skylines_catalogue, startwlen, endwlen, skylines_section, nlines)
 
       if (nlines .gt. 0) then
-        call fit(spectrumchunk, 1., resolutionguess, skylines_section, 0., rtol2, generations, popsize, pressure)
-        skylines(linearraypos:linearraypos+nlines-1)=skylines_section!(1:nlines)
+        if (messages) print "(' ',A,A,F7.1,A,F7.1,A,I3,A)",gettime(),"fitting sky emission from ",spectrumchunk(1)%wavelength," to ",spectrumchunk(size(spectrumchunk))%wavelength," with ",nlines," lines"
+        call fit(spectrumchunk, 1.0, resolutionguess, skylines_section, 3.e-6, rtol2) !velocity guess=0km/s, tolerance~1km/s
+    !use redshift and resolution from this chunk as initial values for next chunk
+!    redshiftguess=skylines_section(1)%redshift
+!    resolutionguess=skylines_section(1)%resolution
+    !copy results back
+        skylines(linearraypos:linearraypos+nlines-1)=skylines_section
         linearraypos=linearraypos+nlines
       endif
-
       deallocate(spectrumchunk)
     enddo
+
   ! make full sky spectrum and subtract at end
 
     call makespectrum(skylines,skyspectrum)
     realspec%flux = realspec%flux - skyspectrum%flux
 
   else
+
     print *,gettime(),"no sky lines in wavelength range covered by spectrum"
+
   endif ! nlines .gt. 0
 endif ! subtractsky
 
@@ -90,12 +114,14 @@ else
   allocate(stronglines(50*nlines))
   do i=1,nlines
     linelocation=minloc(abs(stronglines_catalogue(i)%wavelength*redshiftguess-realspec%wavelength),1)
-    stronglines(50*(i-1)+1:50*i) = realspec(linelocation-24:linelocation+25)
+    if (linelocation-24 .gt. 0 .and. linelocation+25 .lt. size(realspec)) then
+      stronglines(50*(i-1)+1:50*i) = realspec(linelocation-24:linelocation+25)
+    endif
   enddo
 
   !now fit the strong lines
 
-  call fit(stronglines, redshiftguess, resolutionguess, fittedlines, vtol1, rtol1, generations, popsize, pressure)
+  call fit(stronglines, redshiftguess, resolutionguess, fittedlines, vtol1, rtol1)
 
   if (messages) print *,gettime(),"estimated velocity and resolution: ",c*(fittedlines(1)%redshift-1),fittedlines(1)%resolution
   redshiftguess_overall = fittedlines(1)%redshift ! when fitting chunks, use this redshift to get lines in the right range from the catalogue. if velocity from each chunk is used, then there's a chance that a line could be missed or double counted due to variations in the calculated velocity between chunks.
@@ -111,17 +137,38 @@ endif
 linearraypos=1
 
 !get total number of lines and an array to put them all in
-
+if (redshiftguess_overall.eq.0.0) redshiftguess_overall=1.0 ! todo: sort this out upstream with proper initialisation
 call selectlines(deeplines_catalogue, realspec(1)%wavelength/redshiftguess_overall, realspec(size(realspec))%wavelength/redshiftguess_overall, fittedlines, totallines)
 
+if (totallines .eq. 0) then
+  print *,gettime(),"Error: no known emission lines in this spectrum."
+  print *,gettime(),"       Are your wavelength units correct?  Default catalogues use Angstroms"
+  call exit(201)
+endif
+
 if (messages) print *, gettime(),"fitting full spectrum with ",totallines," lines"
+
+! process the spectrum so that it only contains line regions
+
+originalcopy=realspec
+realspec%flux=0
+do i=1,totallines
+  where (abs(fittedlines(i)%wavelength-realspec%wavelength)<6)
+    realspec=originalcopy
+  endwhere
+enddo
 
 !now go through spectrum in chunks of 440 units.  Each one overlaps by 20 units with the previous and succeeding chunk, to avoid the code attempting to fit part of a line profile
 !at beginning and end, padding is only to the right and left respectively
 
 do i=1,spectrumlength,400
 
-  overlap=nint(2*vtol2/(1-realspec(i)%wavelength/realspec(i+1)%wavelength))
+! overlap=nint(2*vtol2/(1-realspec(i)%wavelength/realspec(i+1)%wavelength)) ! this needs fixing, i+1 can be out of bounds
+  overlap=20
+
+! avoid refitting final section. if spectrumlength%400<overlap, this would happen
+
+  if ((spectrumlength-i)<overlap) exit
 
   if (i .eq. 1) then
     startpos=1
@@ -146,10 +193,10 @@ do i=1,spectrumlength,400
 
   if (nlines .gt. 0) then
     if (messages) print "(' ',A,A,F7.1,A,F7.1,A,I3,A)",gettime(),"fitting from ",spectrumchunk(1)%wavelength," to ",spectrumchunk(size(spectrumchunk))%wavelength," with ",nlines," lines"
-    call fit(spectrumchunk, redshiftguess, resolutionguess, fittedlines_section, vtol2, rtol2, generations, popsize, pressure)
+    call fit(spectrumchunk, redshiftguess, resolutionguess, fittedlines_section, vtol2, rtol2)
     !use redshift and resolution from this chunk as initial values for next chunk
-    redshiftguess=fittedlines_section(1)%redshift
-    resolutionguess=fittedlines_section(1)%resolution
+!    redshiftguess=fittedlines_section(1)%redshift
+!    resolutionguess=fittedlines_section(1)%resolution
     !copy results back
     fittedlines(linearraypos:linearraypos+nlines-1)=fittedlines_section
     linearraypos=linearraypos+nlines
@@ -214,30 +261,21 @@ enddo
 if (messages) print *,gettime(),"estimating uncertainties"
 call get_uncertainties(fittedspectrum, realspec, fittedlines)
 
-! write out the fitted spectrum
-
-open(100+tid,file=trim(outputdirectory)//trim(outputbasename)//"_fit")
-
-write (100+tid,*) """wavelength""  ""input spectrum ""  ""fitted spectrum""  ""cont-subbed orig"" ""continuum""  ""sky lines""  ""residuals"""
-do i=1,spectrumlength
-  write(100+tid,"(F8.2, 7(ES12.3))") fittedspectrum(i)%wavelength,realspec(i)%flux + continuum(i)%flux, fittedspectrum(i)%flux + continuum(i)%flux + skyspectrum(i)%flux, realspec(i)%flux, continuum(i)%flux, skyspectrum(i)%flux, realspec(i)%flux - fittedspectrum(i)%flux, realspec(i)%uncertainty
-enddo
-
-close(100+tid)
-
 ! normalise if H beta is present and user did not specify a normalisation
 
 hbetaflux=0.d0
+normalisation=1.d0
 
 do i=1,totallines
   if (abs(fittedlines(i)%wavelength - 4861.33) .lt. 0.005) then
     hbetaflux = gaussianflux(fittedlines(i)%peak,(fittedlines(i)%wavelength/fittedlines(i)%resolution))
+    exit
   endif
 enddo
 
 if (.not. normalise) then
 
-  normalisation = 0.d0
+  normalisation = 1.d0
 
   if (hbetaflux .gt. 0.d0) then
     normalisation = 100./hbetaflux
@@ -251,9 +289,8 @@ if (.not. normalise) then
 
 else
 
-  if (normalisation .eq. 0.0) then
+  if (normalisation .eq. 1.d0) then
     if (messages) print *,gettime(),"no normalisation applied, measured fluxes will be reported"
-    normalisation = 1.d0
   else
     if (messages) print *,gettime(),"normalising to H beta = 100.0 assuming flux of ",normalisation
     normalisation = 100./normalisation
@@ -262,72 +299,19 @@ else
 endif
 
 fittedlines%peak = fittedlines%peak * normalisation
-continuum%flux = continuum%flux * normalisation !for continuum jumps to be scaled
-realspec%uncertainty = realspec%uncertainty * normalisation !for continuum jumps to be scaled
 
-! now write out the line list.
+! replace the masked spectrum with the original one
 
-if (maxval(fittedlines%peak) .lt. 0.1) then
-  fluxformat="ES12.3"
-else
-  fluxformat="F12.3"
+realspec%flux=originalcopy%flux
+
+! write out the fitted spectrum
+
+if (outputformat.eq."text ") then
+  call write_plaintext(realspec,fittedspectrum,continuum,skyspectrum,fittedlines,redshiftguess_overall,resolutionguess,normalisation,hbetaflux,outputbasename,totallines)
+elseif (outputformat.eq."csv  ") then
+  call write_csv(realspec,fittedspectrum,continuum,skyspectrum,fittedlines,redshiftguess_overall,resolutionguess,normalisation,hbetaflux,outputbasename,totallines)
+elseif (outputformat.eq."latex") then
+  call write_latex(realspec,fittedspectrum,continuum,skyspectrum,fittedlines,redshiftguess_overall,resolutionguess,normalisation,hbetaflux,outputbasename,totallines)
+elseif (outputformat.eq."fits ") then
+  call write_fits(realspec,fittedspectrum,continuum,skyspectrum,fittedlines,redshiftguess_overall,resolutionguess,normalisation,hbetaflux,outputbasename,totallines)
 endif
-
-if (messages) print *,gettime(),"writing output files ",trim(outputdirectory),trim(outputbasename),"_lines.tex and ",trim(outputdirectory),trim(outputbasename),"_fit"
-
-if (messages) open(100+tid,file=trim(outputdirectory)//trim(outputbasename)//"_lines.tex")
-open(200+tid,file=trim(outputdirectory)//trim(outputbasename)//"_lines")
-if (messages) write(100+tid,*) "Observed wavelength & Rest wavelength & Flux & Uncertainty & Ion & Multiplet & Lower term & Upper term & g$_1$ & g$_2$ \\"
-do i=1,totallines
-  if (fittedlines(i)%blended .eq. 0 .and. fittedlines(i)%uncertainty .gt. 3.0) then
-    if (messages) write (100+tid,"(F8.2,' & ',F8.2,' & ',"//fluxformat//",' & ',"//fluxformat//",A85)") fittedlines(i)%wavelength*fittedlines(i)%redshift,fittedlines(i)%wavelength,gaussianflux(fittedlines(i)%peak,(fittedlines(i)%wavelength/fittedlines(i)%resolution)), gaussianflux(fittedlines(i)%peak,(fittedlines(i)%wavelength/fittedlines(i)%resolution))/fittedlines(i)%uncertainty, fittedlines(i)%linedata
-    write (200+tid,"(2(F8.2),2("//fluxformat//"))") fittedlines(i)%wavelength*fittedlines(i)%redshift, fittedlines(i)%wavelength, gaussianflux(fittedlines(i)%peak,(fittedlines(i)%wavelength/fittedlines(i)%resolution)), gaussianflux(fittedlines(i)%peak,(fittedlines(i)%wavelength/fittedlines(i)%resolution))/fittedlines(i)%uncertainty
-  elseif (fittedlines(i)%blended .ne. 0) then
-    if (fittedlines(fittedlines(i)%blended)%uncertainty .gt. 3.0) then
-      if (messages) write (100+tid,"(F8.2,' & ',F8.2,' &            * &            *',A85)") fittedlines(i)%wavelength*fittedlines(i)%redshift,fittedlines(i)%wavelength,fittedlines(i)%linedata
-      write (200+tid,"(F8.2,F8.2,'           *           *')") fittedlines(i)%wavelength*fittedlines(i)%redshift,fittedlines(i)%wavelength
-    endif
-! write out 3 sigma upper limit for non-detections if upperlimits flag is set
-  elseif (fittedlines(i)%uncertainty .le. 3.0 .and. upperlimits .eqv. .true.) then
-    if (messages) write (100+tid,"(F8.2,' & ',F8.2,' & ',"//fluxformat//",' & upper limit ',A85)") fittedlines(i)%wavelength*fittedlines(i)%redshift,fittedlines(i)%wavelength, 3.*gaussianflux(fittedlines(i)%peak,(fittedlines(i)%wavelength/fittedlines(i)%resolution))/fittedlines(i)%uncertainty, fittedlines(i)%linedata
-    write (200+tid,"(2(F8.2),"//fluxformat//",' upper limit')") fittedlines(i)%wavelength*fittedlines(i)%redshift, fittedlines(i)%wavelength, 3.*gaussianflux(fittedlines(i)%peak,(fittedlines(i)%wavelength/fittedlines(i)%resolution))/fittedlines(i)%uncertainty
-  endif
-enddo
-
-!write out continuum jump fluxes.  Take continuum at 3630 and 3700A as representative, but write them out as 3645.5 and 3646.5 for input into NEAT
-
-!Balmer
-if (minval(abs(continuum%wavelength-3630.)) .lt. 3630./fittedlines(1)%resolution) then
-  if (messages) write (100+tid,"(F8.2,' &          & ',"//fluxformat//",' & ',"//fluxformat//",' & Balmer jump-\\')") 3645.5, continuum(minloc(abs(continuum%wavelength-3630.)))%flux, realspec(minloc(abs(continuum%wavelength-3630.)))%uncertainty
-  write (200+tid,"(2(F8.2),"//fluxformat//","//fluxformat//")"), 3645.5, 3645.5, continuum(minloc(abs(continuum%wavelength-3630.)))%flux, realspec(minloc(abs(continuum%wavelength-3630.)))%uncertainty
-endif
-
-if (minval(abs(continuum%wavelength-3700.)) .lt. 3700./fittedlines(1)%resolution) then
-  if (messages) write (100+tid,"(F8.2,' &          & ',"//fluxformat//",' & ',"//fluxformat//",' & Balmer jump+\\')") 3646.5, continuum(minloc(abs(continuum%wavelength-3700.)))%flux, realspec(minloc(abs(continuum%wavelength-3700.          )))%uncertainty
-  write (200+tid,"(2(F8.2),"//fluxformat//","//fluxformat//")"), 3646.5, 3646.5, continuum(minloc(abs(continuum%wavelength-3700.)))%flux, realspec(minloc(abs(continuum%wavelength-3700.)))%uncertainty
-endif
-
-!paschen
-
-if (minval(abs(continuum%wavelength-8100.)) .lt. 8100./fittedlines(1)%resolution) then
-  if (messages) write (100+tid,"(F8.2,' &          & ',"//fluxformat//",' & ',"//fluxformat//",' & Paschen jump-\\')") 8100.0, continuum(minloc(abs(continuum%wavelength-8100.)))%flux, realspec(minloc(abs(continuum%wavelength-8100.          )))%uncertainty
-  write (200+tid,"(2(F8.2),"//fluxformat//","//fluxformat//")"), 8100.0, 8100.0, continuum(minloc(abs(continuum%wavelength-8100.)))%flux, realspec(minloc(abs(continuum%wavelength-8100.)))%uncertainty
-endif
-
-if (minval(abs(continuum%wavelength-8400.)) .lt. 8400./fittedlines(1)%resolution) then
-  if (messages) write (100+tid,"(F8.2,' &          & ',"//fluxformat//",' & ',"//fluxformat//",' & Paschen jump+\\')") 8400.0, continuum(minloc(abs(continuum%wavelength-8400.)))%flux, realspec(minloc(abs(continuum%wavelength-8400.          )))%uncertainty
-  write (200+tid,"(2(F8.2),"//fluxformat//","//fluxformat//")"), 8400.0, 8400.0, continuum(minloc(abs(continuum%wavelength-8400.)))%flux, realspec(minloc(abs(continuum%wavelength-8400.)))%uncertainty
-endif
-
-!write out measured Hbeta flux to latex table, if normalisation was applied and if output is required
-
-if (hbetaflux .gt. 0.d0 .and. normalisation .ne. 1.d0 .and. messages) then
-  write (100+tid,*) "\hline"
-  write (100+tid,"(A,ES8.2)") "Measured flux of H$\beta$: ",hbetaflux
-  write (100+tid,*) "\hline"
-endif
-
-!done, close files
-
-close(200+tid)
-if (messages) close(100+tid) 
