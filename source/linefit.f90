@@ -2,11 +2,12 @@
 !Free under the terms of the GNU General Public License v3
 
 module mod_fit
-use mod_routines
+use mod_functions
 use mod_types
+use mod_globals
 
 contains
-subroutine fit(inputspectrum, redshiftguess, resolutionguess, fittedlines, redshifttolerance, resolutiontolerance, generations, popsize, pressure)
+subroutine fit(inputspectrum, redshiftguess, resolutionguess, fittedlines, redshifttolerance, resolutiontolerance)
 
 implicit none
 
@@ -15,9 +16,9 @@ type(linelist), dimension(:,:), allocatable :: population
 type(linelist), dimension(:,:), allocatable ::  breed
 type(spectrum), dimension(:,:), allocatable :: synthspec
 type(spectrum), dimension(:) :: inputspectrum
-integer :: popsize, i, spectrumlength, lineid, loc1, loc2, nlines, gencount, generations, popnumber
+integer :: i, spectrumlength, lineid, loc1, loc2, nlines, gencount, popnumber
 real, dimension(:), allocatable :: sumsquares
-real :: random, pressure
+real :: random, r4_uni_01
 real :: resolutionguess, redshiftguess, redshifttolerance, resolutiontolerance
 real :: scalefactor
 
@@ -30,7 +31,7 @@ real :: scalefactor
   nlines=size(fittedlines%wavelength)
   spectrumlength=size(inputspectrum%wavelength)
 
-  call init_random_seed()
+!  call init_random_seed()
 
   scalefactor=1.d0
   if (maxval(inputspectrum%flux) .lt. 0.01) then
@@ -44,23 +45,16 @@ real :: scalefactor
 
   allocate(synthspec(spectrumlength,popsize))
   allocate(sumsquares(popsize))
-  allocate(breed(int(popsize*pressure),nlines))
+  allocate(breed(nint(popsize*pressure),nlines))
   allocate(population(popsize,nlines))
 
 ! now create population of synthetic spectra
 ! todo, make sure no lines are included which are outside the wavelength range
 ! of the observations
 
-  do i=1,popsize
-    synthspec(:,i)%wavelength=inputspectrum%wavelength
-  enddo
-
   do popnumber=1,popsize
-    population(popnumber,:)%wavelength = fittedlines%wavelength
-    population(popnumber,:)%peak=fittedlines%peak
-    population(popnumber,:)%resolution=resolutionguess
-    population(popnumber,:)%redshift=redshiftguess
-    population(popnumber,:)%linedata=fittedlines%linedata
+    synthspec(:,popnumber)%wavelength=inputspectrum%wavelength
+    population(popnumber,:) = fittedlines
   enddo
 
 ! evolve
@@ -108,7 +102,7 @@ real :: scalefactor
     population(1,:)=population(minloc(sumsquares,1),:)
     sumsquares(minloc(sumsquares,1))=1.e30
 
-    do i=1,int(popsize*pressure)
+    do i=1,nint(popsize*pressure)
       breed(i,:) = population(minloc(sumsquares,1),:)
       sumsquares(minloc(sumsquares,1))=1.e20
     enddo
@@ -118,10 +112,10 @@ real :: scalefactor
   !Alternative approach could be to breed all adjacent pairs so that every model generates one offspring.
 
     do i=2,popsize
-      call random_number(random)
-      loc1=int(popsize*random*pressure)+1
-      call random_number(random)
-      loc2=int(popsize*random*pressure)+1
+      random=r4_uni_01()
+      loc1=floor(popsize*random*pressure)+1
+      random=r4_uni_01()
+      loc2=floor(popsize*random*pressure)+1
       population(i,:)%peak=(breed(loc1,:)%peak + breed(loc2,:)%peak)/2.0
       population(i,:)%resolution=(breed(loc1,:)%resolution + breed(loc2,:)%resolution)/2.0
       population(i,:)%redshift=(breed(loc1,:)%redshift + breed(loc2,:)%redshift)/2.0
