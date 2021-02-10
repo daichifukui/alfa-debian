@@ -1,4 +1,4 @@
-alfa (2.1-1) UNRELEASED; urgency=medium
+alfa (2.1-1) unstable; urgency=medium
 
   * new upstream release
   * updated packaging files to latest standards
