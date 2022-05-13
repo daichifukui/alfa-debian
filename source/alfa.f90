@@ -195,8 +195,10 @@ if (allocated(spectrum_1d)) then !1d spectrum
   fittedspectrum%wavelength=realspec%wavelength
   fittedspectrum%flux=0.d0
 
+! bad data check
+
   if (maxval(realspec%flux) .lt. baddata) then
-    print *,gettime(),"no good data in spectrum (all fluxes are less than ",baddata,")"
+    print *,gettime(),"[200] no good data in spectrum (all fluxes are less than ",baddata,")"
     call exit(200)
     stop
   endif
@@ -246,10 +248,14 @@ elseif (allocated(spectrum_2d)) then !fit 2D data
     realspec%wavelength = wavelengths
     realspec%flux=spectrum_2d(:,rss_i)
 
+! rebin
+
     if (rebinfactor>1) then
       call rebinspectrum(realspec,rebinfactor)
       spectrumlength=size(realspec)
     endif
+
+! initialise guesses
 
     redshiftguess=redshiftguess_initial
     resolutionguess=resolutionguess_initial
@@ -330,10 +336,14 @@ elseif (allocated(spectrum_3d)) then !fit 3D data
       realspec%flux=spectrum_3d(cube_i,cube_j,:)
       realspec%wavelength=wavelengths
 
+! rebin
+
       if (rebinfactor>1) then
         call rebinspectrum(realspec,rebinfactor)
         spectrumlength=size(realspec)
       endif
+
+! initialise guesses
 
       redshiftguess=redshiftguess_initial
       resolutionguess=resolutionguess_initial
@@ -392,13 +402,21 @@ endif
 
 !free memory
 
+if (allocated(axes)) deallocate(axes)
+if (allocated(continuum)) deallocate(continuum)
+if (allocated(deeplines_catalogue)) deallocate(deeplines_catalogue)
+if (allocated(fittedlines)) deallocate(fittedlines)
+if (allocated(fittedlines_section)) deallocate(fittedlines_section)
+if (allocated(fittedspectrum)) deallocate(fittedspectrum)
+if (allocated(originalcopy)) deallocate(originalcopy)
+if (allocated(realspec)) deallocate(realspec)
+if (allocated(skylines_catalogue)) deallocate(skylines_catalogue)
+if (allocated(skyspectrum)) deallocate(skyspectrum)
+if (allocated(spectrum_1d)) deallocate(spectrum_1d)
 if (allocated(spectrum_2d)) deallocate(spectrum_2d)
 if (allocated(spectrum_3d)) deallocate(spectrum_3d)
-if (allocated(axes)) deallocate(axes)
-if (allocated(wavelengths)) deallocate(wavelengths)
-if (allocated(skylines_catalogue)) deallocate(skylines_catalogue)
 if (allocated(stronglines_catalogue)) deallocate(stronglines_catalogue)
-if (allocated(deeplines_catalogue)) deallocate(deeplines_catalogue)
+if (allocated(wavelengths)) deallocate(wavelengths)
 
 print *,gettime(),"all done"
 print *
