@@ -1,6 +1,7 @@
 alfa (2.2-1) unstable; urgency=medium
 
   * new upstream release
+  * updated standards-version
 
  -- Roger Wesson <rw@nebulousresearch.org>  Fri, 13 May 2022 14:47:32 +0100
 
