@@ -4,5 +4,8 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+# Enable all hardening flags, including bindnow
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
 %:
 	dh $@ --no-parallel
