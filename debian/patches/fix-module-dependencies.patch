@@ -1,0 +1,33 @@
+Description: Declare Fortran module dependencies in the Makefile
+ The object files were only listed as prerequisites of the final link, so
+ the build relied on make processing them in the listed order. Object files
+ using a Fortran module must be compiled after the object file providing
+ that module (which generates the .mod file), otherwise compilation fails
+ with "Cannot open module file". This shows up with make --shuffle=reverse
+ or parallel builds. Add explicit dependency rules between object files.
+Author: Claude <noreply@anthropic.com>
+Bug-Debian: https://bugs.debian.org/1105266
+Forwarded: no
+Last-Update: 2026-10-01
+---
+--- a/Makefile
++++ b/Makefile
+@@ -81,6 +81,18 @@ alfa: source/rnglib.o source/types.o sou
+ 	$(LD) $(LDFLAGS) $(FFLAGS) -o $@ $^ $(CFITSIOFLAGS)
+ 	@echo "Compilation complete"
+ 
++# Fortran module dependencies: an object file using a module can only be
++# compiled once the object file providing that module has been built
++source/globals.o: source/types.o
++source/functions.o: source/types.o
++source/commandline.o: source/functions.o source/globals.o
++source/continuum.o: source/globals.o source/quicksort.o source/types.o
++source/linefit.o: source/functions.o source/globals.o source/types.o
++source/output.o: source/functions.o source/globals.o
++source/readfiles.o: source/functions.o source/globals.o source/types.o
++source/uncertainties.o: source/quicksort.o source/types.o
++source/alfa.o: source/commandline.o source/continuum.o source/linefit.o source/functions.o source/globals.o source/output.o source/readfiles.o source/types.o source/uncertainties.o
++
+ clean:
+ 	rm -f alfa source/*.o source/*.mod man/alfa.html
+ 
