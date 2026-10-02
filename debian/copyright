@@ -3,12 +3,17 @@ Upstream-Name: alfa
 Source: https://github.com/rwesson/ALFA
 
 Files: *
-Copyright: 2013-2016, Roger Wesson
+Copyright: 2013-2025, Roger Wesson <rw@nebulousresearch.org>
 License: GPL-3+
 
 Files: source/quicksort.f90
 Copyright: 2005 Alberto Ramos <alberto@martin.ft.uam.es>
 License: GPL-2+
+
+Files: debian/*
+Copyright: 2016-2022, Roger Wesson <rw@nebulousresearch.org>
+           2026, Fukui Daichi <a.dog.will.talk@akane.waseda.jp>
+License: GPL-3+
 
 License: GPL-2+
  This package is free software; you can redistribute it and/or modify
